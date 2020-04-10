@@ -11,8 +11,9 @@ class MessengerBot:
         if self.client is None:
             cookies = None
             try:
-                with open("session.json", "r") as file:
+                with open("session.json") as file:
                     cookies = json.load(file)
+                    print("Loading session cookies...")
 
             except FileNotFoundError:
                 print("First time logging in...")

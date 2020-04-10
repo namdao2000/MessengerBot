@@ -21,7 +21,7 @@ class MessengerBot:
             print(self.client.isLoggedIn())
 
             if cookies is None:
-                with open("session.josn", "w") as file:
+                with open("session.json", "w") as file:
                     json.dump(self.client.getSession(), file)
 
 

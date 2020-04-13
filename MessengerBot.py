@@ -6,7 +6,7 @@ import requests
 import re
 import os
 import time
-from threading import Thread
+from multiprocessing import Process, Value, Manager
 import socket
 
 
@@ -73,7 +73,7 @@ class CustomClient(Client):
             global que_position, socket, recent_call
             que_position += 1
             print("Started a thread to collect {}".format(question_id(message)))
-            respond("You have {} new questions left. Approximate retrieval time: {:.0F} seconds".format(daily_limit[author_id], que_position*10 + 1*max(0, 25-(time.time()-recent_call)) + (que_position-1)*25))
+            respond("You have {} new questions left. Approximate retrieval time: {:.0F} seconds".format(daily_limit[author_id], que_position*25 + 1*max(0, 25-(time.time()-recent_call)) + (que_position-1)*25))
 
             while que_position-1 != 0 or time.time() - recent_call < 25:
                 time.sleep(0.1)
@@ -82,17 +82,17 @@ class CustomClient(Client):
             recent_call = time.time()
             print("Request sent to AnswerMe")
             started = time.time()
-            while time.time() - started < 15:
+            while time.time() - started < 25:
                 if os.path.exists("./screenshots/" + question_id(message) + ".png"):
                     respond("./screenshots/" + question_id(message) + ".png", "IMAGE")
                     que_position -= 1
                     return
+                os.sleep(0.5)
             respond("Error: Timed out.")
 
         if time.time() - start_time > 86400:
             start_time = time.time()
             daily_limit = {}
-        print(message_object)
         if author_id != self.uid:
             if re.search("CHEGG", message):
                 message = message.replace("CHEGG", "").strip()

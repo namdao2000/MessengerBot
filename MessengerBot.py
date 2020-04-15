@@ -8,7 +8,7 @@ import os
 import time
 from multiprocessing import Process, Value, Manager
 import socket
-
+import copy
 
 def finalVerification(url):
     if re.search("homework-help", url):
@@ -52,46 +52,88 @@ def isAnswered(url):
         return False
 
 
+def respondFinal(client, text, thread_type, thread_id, author_id, msgType=None):
+    if thread_type == thread_type.GROUP:
+        if msgType is None:
+            client.send(Message(text=text), thread_id=thread_id, thread_type=thread_type)
+        elif msgType == "IMAGE":
+            client.sendLocalImage(text, thread_id=thread_id, thread_type=thread_type)
+    elif thread_type == thread_type.USER:
+        if msgType is None:
+            client.send(Message(text=text), thread_id=author_id, thread_type=thread_type)
+        elif msgType == "IMAGE":
+            client.sendLocalImage(text, thread_id=author_id, thread_type=thread_type)
+
+
+def collectPNG(tasks, socket):
+    # collectBot = MessengerBot()
+    # collectBot.login(username, passwd)
+    # print("Collection bot initialised...")
+    #
+    # def processTask(task):
+    #     global finished
+    #     url = task[0]
+    #     thread_type = task[1]
+    #     thread_id = task[2]
+    #     author_id = task[3]
+    #
+    #     def respond(text, msgType=None):
+    #         respondFinal(collectBot.getClient(), text, thread_type, thread_id, author_id, msgType)
+    #
+    #     socket.sendto(url.encode(), ("127.0.0.1", 5000))
+    #     started = time.time()
+    #
+    #     while time.time() - started < 30:
+    #         if os.path.exists("./screenshots/" + question_id(url) + ".png"):
+    #             respond("./screenshots/" + question_id(url) + ".png", "IMAGE")
+    #             return
+    #         time.sleep(0.5)
+    #     respond("Error: Timed out.")
+    #     finished = True
+    #
+    # while True:
+    #     if len(tasks) > 0:
+    #         print(tasks)
+    #         finished = False
+    #         processTask(tasks.pop())
+    #         while not finished:
+    #             time.sleep(0.1)
+    #     else:
+    #         time.sleep(0.1)
+
+
+    # que_position.value += 1
+    # print("Started a thread to collect {}".format(question_id(message)))
+    # # respond("You have {} new questions left. Approximate retrieval time: {:.0F} seconds".format(daily_limit[author_id], que_position*25 + 1*max(0, 25-(time.time()-recent_call)) + (que_position-1)*25))
+    #
+    # while que_position.value-1 != 0 or time.time() - recent_call.value < 25:
+    #     time.sleep(0.1)
+    #
+    # socket.sendto(message.encode(), ("127.0.0.1", 5000))
+    # recent_call.value = time.time()
+    # print("Request sent to AnswerMe")
+    # started = time.time()
+    # while time.time() - started < 25:
+    #     if os.path.exists("./screenshots/" + question_id(message) + ".png"):
+    #         respond("./screenshots/" + question_id(message) + ".png", "IMAGE")
+    #         que_position.value -= 1
+    #         return
+    #     time.sleep(0.5)
+    # respond("Error: Timed out.")
+    # respond("We came this far")
+    pass
+
+
 class CustomClient(Client):
 
     def onMessage(self, mid, author_id, message, message_object, thread_id, thread_type, ts, metadata, msg):
-        global daily_limit, start_time
+        global daily_limit, start_time, socket, tasks
 
         def respond(text, msgType=None):
-            if thread_type == thread_type.GROUP:
-                if msgType is None:
-                    self.send(Message(text=text), thread_id=thread_id, thread_type=thread_type)
-                elif msgType == "IMAGE":
-                    self.sendLocalImage(text, thread_id=thread_id, thread_type=thread_type)
-            elif thread_type == thread_type.USER:
-                if msgType is None:
-                    self.send(Message(text=text), thread_id=author_id, thread_type=thread_type)
-                elif msgType == "IMAGE":
-                    self.sendLocalImage(text, thread_id=author_id, thread_type=thread_type)
+            respondFinal(self, text, thread_type, thread_id, author_id, msgType)
 
-        def collectPNG():
-            global que_position, socket, recent_call
-            que_position += 1
-            print("Started a thread to collect {}".format(question_id(message)))
-            respond("You have {} new questions left. Approximate retrieval time: {:.0F} seconds".format(daily_limit[author_id], que_position*25 + 1*max(0, 25-(time.time()-recent_call)) + (que_position-1)*25))
-
-            while que_position-1 != 0 or time.time() - recent_call < 25:
-                time.sleep(0.1)
-
-            socket.sendto(message.encode(), ("127.0.0.1", 5000))
-            recent_call = time.time()
-            print("Request sent to AnswerMe")
-            started = time.time()
-            while time.time() - started < 25:
-                if os.path.exists("./screenshots/" + question_id(message) + ".png"):
-                    respond("./screenshots/" + question_id(message) + ".png", "IMAGE")
-                    que_position -= 1
-                    return
-                os.sleep(0.5)
-            respond("Error: Timed out.")
-
-        if time.time() - start_time > 86400:
-            start_time = time.time()
+        if time.time() - start_time.value > 86400:
+            start_time.value = time.time()
             daily_limit = {}
         if author_id != self.uid:
             if re.search("CHEGG", message):
@@ -105,7 +147,10 @@ class CustomClient(Client):
                         if author_id not in daily_limit:
                             daily_limit[author_id] = 4
                         daily_limit[author_id] -= 1
-                        Thread(target=collectPNG).start()
+                        # temp = MessengerBot()
+                        # temp.login(username, passwd)
+                        # p = Process(target=collectPNG, args=(temp, thread_type, thread_id, author_id, socket, num_process, daily_limit))
+                        # p.start()
                     else:
                         respond(
                             "You have asked too many questions today. Please wait {:.2f} minute(s) to ask more questions!".format(
@@ -140,17 +185,22 @@ class MessengerBot:
         print("Listening")
         self.client.listen()
 
+    def getClient(self):
+        return self.client
+
 
 if __name__ == "__main__":
     while True:
-        try:
-            socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            que_position = 0
-            start_time = time.time()
-            recent_call = 0
-            daily_limit = {}
-            bot = MessengerBot()
-            bot.login(username, passwd)
-            bot.listen()
-        except Exception:
-            continue
+        socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        manager = Manager()
+        tasks = manager.list(manager.list())
+        daily_limit = manager.dict()
+        start_time = Value('f', 0)
+        bot = MessengerBot()
+        bot.login(username, passwd)
+        # p = Process(target=collectPNG, args=(tasks, socket))
+        # p.start()
+        # bot.listen()
+        # except Exception:
+        #
+        #     continue

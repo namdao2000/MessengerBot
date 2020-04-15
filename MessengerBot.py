@@ -65,41 +65,28 @@ def respondFinal(client, text, thread_type, thread_id, author_id, msgType=None):
             client.sendLocalImage(text, thread_id=author_id, thread_type=thread_type)
 
 
-def collectPNG(tasks, socket):
-    # collectBot = MessengerBot()
-    # collectBot.login(username, passwd)
-    # print("Collection bot initialised...")
-    #
-    # def processTask(task):
-    #     global finished
-    #     url = task[0]
-    #     thread_type = task[1]
-    #     thread_id = task[2]
-    #     author_id = task[3]
-    #
-    #     def respond(text, msgType=None):
-    #         respondFinal(collectBot.getClient(), text, thread_type, thread_id, author_id, msgType)
-    #
-    #     socket.sendto(url.encode(), ("127.0.0.1", 5000))
-    #     started = time.time()
-    #
-    #     while time.time() - started < 30:
-    #         if os.path.exists("./screenshots/" + question_id(url) + ".png"):
-    #             respond("./screenshots/" + question_id(url) + ".png", "IMAGE")
-    #             return
-    #         time.sleep(0.5)
-    #     respond("Error: Timed out.")
-    #     finished = True
-    #
-    # while True:
-    #     if len(tasks) > 0:
-    #         print(tasks)
-    #         finished = False
-    #         processTask(tasks.pop())
-    #         while not finished:
-    #             time.sleep(0.1)
-    #     else:
-    #         time.sleep(0.1)
+def collectPNG(bot, socket, task):
+    def respond(text, msgType=None):
+        respondFinal(bot.getClient(), text, thread_type, thread_id, author_id, msgType)
+
+    print("Collection bot initialised...")
+
+    url = task[0]
+    thread_type = task[1]
+    thread_id = task[2]
+    author_id = task[3]
+
+    socket.sendto(url.encode(), ("127.0.0.1", 5000))
+    print("Request sent")
+    started = time.time()
+
+    while time.time() - started < 20:
+        if os.path.exists("./screenshots/" + question_id(url) + ".png"):
+            respond("./screenshots/" + question_id(url) + ".png", "IMAGE")
+            return
+        time.sleep(0.5)
+    respond("Your question {} has timed out. Sorry :/".format(question_id(url)))
+
 
 
     # que_position.value += 1
@@ -121,19 +108,18 @@ def collectPNG(tasks, socket):
     #     time.sleep(0.5)
     # respond("Error: Timed out.")
     # respond("We came this far")
-    pass
 
 
 class CustomClient(Client):
 
     def onMessage(self, mid, author_id, message, message_object, thread_id, thread_type, ts, metadata, msg):
-        global daily_limit, start_time, socket, tasks
+        global daily_limit, start_time, socket, bot2, num_processes
 
         def respond(text, msgType=None):
             respondFinal(self, text, thread_type, thread_id, author_id, msgType)
 
-        if time.time() - start_time.value > 86400:
-            start_time.value = time.time()
+        if time.time() - start_time > 86400:
+            start_time = time.time()
             daily_limit = {}
         if author_id != self.uid:
             if re.search("CHEGG", message):
@@ -145,12 +131,21 @@ class CustomClient(Client):
                         respond("./screenshots/" + question_id(message) + ".png", "IMAGE")
                     elif author_id in daily_limit and daily_limit[author_id] > 0 or author_id not in daily_limit:
                         if author_id not in daily_limit:
-                            daily_limit[author_id] = 4
+                            daily_limit[author_id] = 5
                         daily_limit[author_id] -= 1
-                        # temp = MessengerBot()
-                        # temp.login(username, passwd)
-                        # p = Process(target=collectPNG, args=(temp, thread_type, thread_id, author_id, socket, num_process, daily_limit))
-                        # p.start()
+
+                        for ps_predicted_finish in num_processes:
+                            if time.time() > ps_predicted_finish:
+                                num_processes.remove(ps_predicted_finish)
+
+                        predicted_time = 15*max(0, len(num_processes)) + 20 * (len(num_processes)+1)
+                        num_processes.append(time.time() + predicted_time)
+
+                        respond("You have {} new questions left. Approximate retrieval time: {:.0F} seconds".format(daily_limit[author_id], predicted_time))
+
+                        task = [message, thread_type, thread_id, author_id]
+                        p = Process(target=collectPNG, args=(bot2, socket,task))
+                        p.start()
                     else:
                         respond(
                             "You have asked too many questions today. Please wait {:.2f} minute(s) to ask more questions!".format(
@@ -190,17 +185,12 @@ class MessengerBot:
 
 
 if __name__ == "__main__":
-    while True:
-        socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        manager = Manager()
-        tasks = manager.list(manager.list())
-        daily_limit = manager.dict()
-        start_time = Value('f', 0)
-        bot = MessengerBot()
-        bot.login(username, passwd)
-        # p = Process(target=collectPNG, args=(tasks, socket))
-        # p.start()
-        # bot.listen()
-        # except Exception:
-        #
-        #     continue
+    socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    num_processes = []
+    daily_limit = {}
+    start_time = 0
+    bot = MessengerBot()
+    bot2 = MessengerBot()
+    bot.login(username, passwd)
+    bot2.login(username, passwd)
+    bot.listen()

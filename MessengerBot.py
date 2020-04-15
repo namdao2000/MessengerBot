@@ -6,9 +6,9 @@ import requests
 import re
 import os
 import time
-from multiprocessing import Process, Value, Manager
+from multiprocessing import Process
 import socket
-import copy
+
 
 def finalVerification(url):
     if re.search("homework-help", url):
@@ -88,30 +88,13 @@ def collectPNG(bot, socket, task):
     respond("Your question {} has timed out. Sorry :/".format(question_id(url)))
 
 
-
-    # que_position.value += 1
-    # print("Started a thread to collect {}".format(question_id(message)))
-    # # respond("You have {} new questions left. Approximate retrieval time: {:.0F} seconds".format(daily_limit[author_id], que_position*25 + 1*max(0, 25-(time.time()-recent_call)) + (que_position-1)*25))
-    #
-    # while que_position.value-1 != 0 or time.time() - recent_call.value < 25:
-    #     time.sleep(0.1)
-    #
-    # socket.sendto(message.encode(), ("127.0.0.1", 5000))
-    # recent_call.value = time.time()
-    # print("Request sent to AnswerMe")
-    # started = time.time()
-    # while time.time() - started < 25:
-    #     if os.path.exists("./screenshots/" + question_id(message) + ".png"):
-    #         respond("./screenshots/" + question_id(message) + ".png", "IMAGE")
-    #         que_position.value -= 1
-    #         return
-    #     time.sleep(0.5)
-    # respond("Error: Timed out.")
-    # respond("We came this far")
-
-
 class CustomClient(Client):
+    def onFriendRequest(self, from_id=None, msg=None):
+        def respond(text, msgType=None):
+            respondFinal(self, text, ThreadType.USER, None, from_id, msgType)
 
+        self.friendConnect(from_id)
+        respond("Hello! To use me, type in CHEGG followed by the link of your question. i.e CHEGG <Link>")
     def onMessage(self, mid, author_id, message, message_object, thread_id, thread_type, ts, metadata, msg):
         global daily_limit, start_time, socket, bot2, num_processes
 

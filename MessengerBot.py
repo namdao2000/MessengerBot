@@ -16,6 +16,15 @@ def finalVerification(url):
     return False
 
 
+def cleanupURL(url):
+    try:
+        if re.search("\?trackid", url):
+            url = url.split("?trackid")
+        return url[0]
+    except Exception:
+        return url
+
+
 def question_id(url):
     try:
         ID = ""
@@ -44,12 +53,9 @@ def verifyURL(url):
 
 
 def isAnswered(url):
-    id = question_id(url)
-    for root, dirs, files in os.walk("./screenshots"):
-        for name in files:
-            if name == id + ".png":
-                return True
-        return False
+    if os.path.exists("./screenshots/" + question_id(url) + ".png"):
+        return True
+    return False
 
 
 def respondFinal(client, text, thread_type, thread_id, author_id, msgType=None):
@@ -65,9 +71,9 @@ def respondFinal(client, text, thread_type, thread_id, author_id, msgType=None):
             client.sendLocalImage(text, thread_id=author_id, thread_type=thread_type)
 
 
-def collectPNG(bot, socket, task):
+def collectPNG(client, socket, task, delay):
     def respond(text, msgType=None):
-        respondFinal(bot.getClient(), text, thread_type, thread_id, author_id, msgType)
+        respondFinal(client.getClient(), text, thread_type, thread_id, author_id, msgType)
 
     print("Collection bot initialised...")
 
@@ -78,10 +84,11 @@ def collectPNG(bot, socket, task):
 
     socket.sendto(url.encode(), ("127.0.0.1", 5000))
     print("Request sent")
+    time.sleep(delay)
     started = time.time()
-
     while time.time() - started < 20:
         if os.path.exists("./screenshots/" + question_id(url) + ".png"):
+            respond("Sending over a {:.1f} MB file 📧".format(os.path.getsize("./screenshots/" + question_id(url) + ".png")/(1024*1024)))
             respond("./screenshots/" + question_id(url) + ".png", "IMAGE")
             return
         time.sleep(0.5)
@@ -94,7 +101,9 @@ class CustomClient(Client):
             respondFinal(self, text, ThreadType.USER, None, from_id, msgType)
 
         self.friendConnect(from_id)
-        respond("Hello! To use me, type in CHEGG followed by the link of your question. i.e CHEGG <Link>")
+        respond("Hello! To use me, type in CHEGG followed by the link of your question obtained from google. Example:")
+        respond("CHEGG https://www.chegg.com/homework-help/questions-and-answers/o-hura-company-following-information-available-end-2018-income-statement-year-ended-decemb-q23374155")
+
     def onMessage(self, mid, author_id, message, message_object, thread_id, thread_type, ts, metadata, msg):
         global daily_limit, start_time, socket, bot2, num_processes
 
@@ -108,13 +117,17 @@ class CustomClient(Client):
             if re.search("CHEGG", message):
                 message = message.replace("CHEGG", "").strip()
                 if verifyURL(message) and finalVerification(message):
+                    message = cleanupURL(message)
                     respond("Your question {} is being processed.".format(question_id(message)))
                     if isAnswered(message):
                         respond("The question has been identified in Steve's data base.")
+                        respond("Sending over a {:.1f} MB file 📧".format(
+                            os.path.getsize("./screenshots/" + question_id(message) + ".png") / (1024 * 1024)))
+
                         respond("./screenshots/" + question_id(message) + ".png", "IMAGE")
                     elif author_id in daily_limit and daily_limit[author_id] > 0 or author_id not in daily_limit:
                         if author_id not in daily_limit:
-                            daily_limit[author_id] = 5
+                            daily_limit[author_id] = 6
                         daily_limit[author_id] -= 1
 
                         for ps_predicted_finish in num_processes:
@@ -124,10 +137,10 @@ class CustomClient(Client):
                         predicted_time = 15*max(0, len(num_processes)) + 20 * (len(num_processes)+1)
                         num_processes.append(time.time() + predicted_time)
 
-                        respond("You have {} new questions left. Approximate retrieval time: {:.0F} seconds".format(daily_limit[author_id], predicted_time))
+                        respond("You have {} questions left today. Approximate retrieval time: {:.0F} seconds".format(daily_limit[author_id], predicted_time))
 
                         task = [message, thread_type, thread_id, author_id]
-                        p = Process(target=collectPNG, args=(bot2, socket,task))
+                        p = Process(target=collectPNG, args=(bot2, socket,task, predicted_time))
                         p.start()
                     else:
                         respond(

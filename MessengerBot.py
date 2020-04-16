@@ -20,7 +20,9 @@ def cleanupURL(url):
     try:
         if re.search("\?trackid", url):
             url = url.split("?trackid")
-        return url[0]
+            return url[0]
+        else:
+            return url
     except Exception:
         return url
 
@@ -71,7 +73,7 @@ def respondFinal(client, text, thread_type, thread_id, author_id, msgType=None):
             client.sendLocalImage(text, thread_id=author_id, thread_type=thread_type)
 
 
-def collectPNG(client, socket, task, delay):
+def collectPNG(client, socket, task, processes):
     def respond(text, msgType=None):
         respondFinal(client.getClient(), text, thread_type, thread_id, author_id, msgType)
 
@@ -84,9 +86,8 @@ def collectPNG(client, socket, task, delay):
 
     socket.sendto(url.encode(), ("127.0.0.1", 5000))
     print("Request sent")
-    time.sleep(delay)
     started = time.time()
-    while time.time() - started < 20:
+    while time.time() - started < (processes * 600):
         if os.path.exists("./screenshots/" + question_id(url) + ".png"):
             respond("Sending over a {:.1f} MB file 📧".format(os.path.getsize("./screenshots/" + question_id(url) + ".png")/(1024*1024)))
             respond("./screenshots/" + question_id(url) + ".png", "IMAGE")
@@ -134,13 +135,13 @@ class CustomClient(Client):
                             if time.time() > ps_predicted_finish:
                                 num_processes.remove(ps_predicted_finish)
 
-                        predicted_time = 15*max(0, len(num_processes)) + 20 * (len(num_processes)+1)
+                        predicted_time = 15*max(0, len(num_processes)) + (180 * (len(num_processes)+1))
                         num_processes.append(time.time() + predicted_time)
 
-                        respond("You have {} questions left today. Approximate retrieval time: {:.0F} seconds".format(daily_limit[author_id], predicted_time))
+                        respond("You have {} questions left today. Approximate retrieval time: {:.0F} minutes".format(daily_limit[author_id], predicted_time/60))
 
                         task = [message, thread_type, thread_id, author_id]
-                        p = Process(target=collectPNG, args=(bot2, socket,task, predicted_time))
+                        p = Process(target=collectPNG, args=(bot2, socket,task, len(num_processes)))
                         p.start()
                     else:
                         respond(
